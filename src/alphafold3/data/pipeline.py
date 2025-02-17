@@ -410,6 +410,35 @@ class DataPipeline:
     )
     self._pdb_database_path = data_pipeline_config.pdb_database_path
 
+
+  def process_design_chain(
+      self, chain: folding_input.ProteinChain
+  ) -> folding_input.ProteinChain:
+    """Processes a single protein chain."""
+#    has_unpaired_msa = chain.unpaired_msa is not None
+#    has_paired_msa = chain.paired_msa is not None
+#    has_templates = chain.templates is not None
+
+    templates = []
+
+    empty_msa = msa.Msa.from_empty(
+          query_sequence=chain.sequence,
+          chain_poly_type=mmcif_names.PROTEIN_CHAIN,
+      ).to_a3m()
+    unpaired_msa =empty_msa
+    paired_msa = empty_msa
+
+
+    return folding_input.ProteinChain(
+        id=chain.id,
+        sequence=chain.sequence,
+        ptms=chain.ptms,
+        unpaired_msa=unpaired_msa,
+        paired_msa=paired_msa,
+        templates=templates,
+    )
+
+
   def process_protein_chain(
       self, chain: folding_input.ProteinChain
   ) -> folding_input.ProteinChain:
@@ -529,6 +558,10 @@ class DataPipeline:
         unpaired_msa=unpaired_msa,
     )
 
+
+
+
+
   def process(self, fold_input: folding_input.Input) -> folding_input.Input:
     """Runs MSA and template tools and returns a new Input with the results."""
     processed_chains = []
@@ -538,6 +571,26 @@ class DataPipeline:
       match chain:
         case folding_input.ProteinChain():
           processed_chains.append(self.process_protein_chain(chain))
+        case folding_input.RnaChain():
+          processed_chains.append(self.process_rna_chain(chain))
+        case _:
+          processed_chains.append(chain)
+      print(
+          f'Running data pipeline for chain {chain.id} took'
+          f' {time.time() - process_chain_start_time:.2f} seconds',
+      )
+
+    return dataclasses.replace(fold_input, chains=processed_chains)
+
+  def process_design(self, fold_input: folding_input.Input) -> folding_input.Input:
+    """Runs MSA and template tools and returns a new Input with the results."""
+    processed_chains = []
+    for chain in fold_input.chains:
+      print(f'Running data pipeline for chain {chain.id}...')
+      process_chain_start_time = time.time()
+      match chain:
+        case folding_input.ProteinChain():
+          processed_chains.append(self.process_design_chain(chain))
         case folding_input.RnaChain():
           processed_chains.append(self.process_rna_chain(chain))
         case _:

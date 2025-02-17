@@ -93,6 +93,12 @@ _RUN_INFERENCE = flags.DEFINE_bool(
     'Whether to run inference on the fold inputs.',
 )
 
+_RUN_DESIGN = flags.DEFINE_bool(
+    'run_design',
+    True,
+    'Whether to run inference on the fold inputs which is not natural',
+)
+
 # Binary paths.
 _JACKHMMER_BINARY_PATH = flags.DEFINE_string(
     'jackhmmer_binary_path',
@@ -559,6 +565,7 @@ def process_fold_input(
     output_dir: os.PathLike[str] | str,
     buckets: Sequence[int] | None = None,
     conformer_max_iterations: int | None = None,
+    design: bool = False
 ) -> folding_input.Input | Sequence[ResultsForSeed]:
   """Runs data pipeline and/or inference on a single fold input.
 
@@ -601,6 +608,9 @@ def process_fold_input(
 
   if data_pipeline_config is None:
     print('Skipping data pipeline...')
+  elif design is True:
+      print("Here I am !!!")
+      fold_input = pipeline.DataPipeline(data_pipeline_config).process_design(fold_input)
   else:
     print('Running data pipeline...')
     fold_input = pipeline.DataPipeline(data_pipeline_config).process(fold_input)
@@ -669,7 +679,7 @@ def main(_):
     print(f'Failed to create output directory {_OUTPUT_DIR.value}: {e}')
     raise
 
-  if _RUN_INFERENCE.value:
+  if _RUN_INFERENCE.value or _RUN_DESIGN.value:
     # Fail early on incompatible devices, but only if we're running inference.
     gpu_devices = jax.local_devices(backend='gpu')
     if gpu_devices:
@@ -710,7 +720,7 @@ def main(_):
   )
   print('\n' + '\n'.join(notice) + '\n')
 
-  if _RUN_DATA_PIPELINE.value:
+  if _RUN_DATA_PIPELINE.value or _RUN_DESIGN.value:
     expand_path = lambda x: replace_db_dir(x, DB_DIR.value)
     max_template_date = datetime.date.fromisoformat(_MAX_TEMPLATE_DATE.value)
     data_pipeline_config = pipeline.DataPipelineConfig(
@@ -734,10 +744,12 @@ def main(_):
         nhmmer_n_cpu=_NHMMER_N_CPU.value,
         max_template_date=max_template_date,
     )
+  #elif _RUN_DESIGN.value:
+  #  data_pipeline_config = True
   else:
     data_pipeline_config = None
 
-  if _RUN_INFERENCE.value:
+  if _RUN_INFERENCE.value or _RUN_DESIGN.value:
     devices = jax.local_devices(backend='gpu')
     print(
         f'Found local devices: {devices}, using device {_GPU_DEVICE.value}:'
@@ -764,6 +776,7 @@ def main(_):
     model_runner = None
 
   num_fold_inputs = 0
+
   for fold_input in fold_inputs:
     if _NUM_SEEDS.value is not None:
       print(f'Expanding fold job {fold_input.name} to {_NUM_SEEDS.value} seeds')
@@ -775,6 +788,7 @@ def main(_):
         output_dir=os.path.join(_OUTPUT_DIR.value, fold_input.sanitised_name()),
         buckets=tuple(int(bucket) for bucket in _BUCKETS.value),
         conformer_max_iterations=_CONFORMER_MAX_ITERATIONS.value,
+        design=_RUN_DESIGN.value
     )
     num_fold_inputs += 1
 
